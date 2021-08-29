@@ -19,7 +19,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from onesec_api import Mailbox
 import logger
 
-
+df = pd.read_csv('https://docs.google.com/spreadsheets/d/1zaxjdu9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw/export?'
+                 'format=csv&'
+                 'id=1zaxjdu9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw&'
+                 'gid=1789053577', dtype={'number': str})
+numbers = itertools.cycle(df['number'].dropna().tolist())
 LOGGER = logger.logger('Russiandoska')
 if platform == "linux" or platform == "linux2":
     IMAGES_PATH = '/home/danil/images'
@@ -103,25 +107,30 @@ class Russiandoska:
 
     def spam(self):
         try:
-            print('вход')
             self.driver.get(choice(df['category'].dropna().tolist()))
             country = '/html/body/div/div[3]/div[2]/form/div[3]/select[1]/option[2]'
             try:
                 WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.XPATH, country))).click()
             except TimeoutException:
-                print('не удалиось на страницу')
+                print('не удалиось загрузить страницу')
                 return False
-            msc = 4
-            # spb = 7
-            # city = f'//*[@id="a12"]/option[{choice([spb, msc])}]'
-            city = f'//*[@id="a12"]/option[{choice([msc])}]'
-            self.driver.find_element_by_xpath(city).click()
+            city_choice = choice(['msc', 'spb', 'sochi'])
+            if city_choice == 'msc':
+                region = f'//*[@id="a12"]/option[4]'
+                self.driver.find_element_by_xpath(region).click()
+            if city_choice == 'spb':
+                region = f'//*[@id="a12"]/option[7]'
+                self.driver.find_element_by_xpath(region).click()
+            if city_choice == 'sochi':
+                region = f'//*[@id="a12"]/option[2]'
+                self.driver.find_element_by_xpath(region).click()
+                city = f'//*[@id="a13"]/option[4]'
+                self.driver.find_element_by_xpath(city).click()
             titile_input = '//input[@name="title"]'
             self.driver.find_element_by_xpath(titile_input).send_keys(self.title)
             details_textarea = '//textarea[@name="detail"]'
             self.driver.find_element_by_xpath(details_textarea).send_keys(self.detail)
             email = str(Mailbox())
-            print(email)
             input_email = '//input[@id="email"]'
             self.driver.find_element_by_xpath(input_email).send_keys(email)
             input_email = '//input[@id="email_confirm"]'
@@ -148,7 +157,7 @@ class Russiandoska:
                 WebDriverWait(self.driver, 15).until(
                     ec.presence_of_element_located((By.XPATH, publish_input))).click()
                 self.check_mail(email)
-                LOGGER.info(f'advertisement published {phone_number} {email}')
+                LOGGER.info(f'published {phone_number} {email} {city_choice}')
                 return True
             except (AssertionError, TimeoutException):
                 print('объявление не опубликовано')
@@ -159,26 +168,23 @@ class Russiandoska:
 
 
 def main():
-    try:
-        doska = Russiandoska(titles, details, args.headless)
-        doska.spam()
-        doska.driver.quit()
-    except Exception as error:
-        LOGGER.exception(error)
-        logger.email_alert('russianDoska', 'LOG', 'log.log')
+    titles = df['titles'].dropna().tolist()
+    details = df['details'].dropna().tolist()
+    while True:
+        try:
+            doska = Russiandoska(titles, details, False)
+            doska.spam()
+            doska.driver.quit()
+        except Exception as error:
+            LOGGER.exception(error)
 
 
 if __name__ == '__main__':
-    headless: bool = False
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--headless", dest="headless", default=headless, type=bool)
-    args = parser.parse_args()
-    df = pd.read_csv('https://docs.google.com/spreadsheets/d/1zaxjdu9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw/export?'
-                     'format=csv&'
-                     'id=1zaxjdu9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw&'
-                     'gid=1789053577', dtype={'number': str})
-    titles = df['titles'].dropna().tolist()
-    details = df['details'].dropna().tolist()
-    numbers = itertools.cycle(df['number'].dropna().tolist())
-    while True:
-        main()
+    from multiprocessing import Process
+    processes = []
+    for _ in range(2):
+        process = Process(target=main)
+        processes.append(process)
+        process.start()
+    for process in processes:
+        process.join()
