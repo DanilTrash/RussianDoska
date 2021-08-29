@@ -1,0 +1,1 @@
+scp *.py danil@192.168.88.38:/home/danil/russiandoska
