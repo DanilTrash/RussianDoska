@@ -1,10 +1,12 @@
-import argparse
+from __future__ import annotations
 import itertools
 import os
 from io import BytesIO
 from random import choice
 from sys import platform
 from time import sleep
+from collections.abc import Iterable, Iterator
+from typing import Any, List
 
 import pandas as pd
 import requests
@@ -19,39 +21,58 @@ from selenium.webdriver.support.ui import WebDriverWait
 from onesec_api import Mailbox
 import logger
 
-df = pd.read_csv('https://docs.google.com/spreadsheets/d/1zaxjdu9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw/export?'
-                 'format=csv&'
-                 'id=1zaxjdu9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw&'
-                 'gid=1789053577', dtype={'number': str})
-numbers = itertools.cycle(df['number'].dropna().tolist())
+
 LOGGER = logger.logger('Russiandoska')
 if platform == "linux" or platform == "linux2":
     IMAGES_PATH = '/home/danil/images'
 elif platform == "win32":
     IMAGES_PATH = 'C:/Users/KIEV-COP-4/Desktop/images'
+dataframe = pd.read_csv('https://docs.google.com/spreadsheets/d/1zaxjdu'
+                        '9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw/export?'
+                        'format=csv&'
+                        'id=1zaxjdu9ESYy2MCNuDow0_5PnZpwEsyrdTQ_kk0PMZbw&'
+                        'gid=1789053577', dtype={'number': str, 'region': str})
+
+
+class Data(Iterator):
+    def __init__(self, argument, position) -> None:
+        self._collection = dataframe[argument].dropna().tolist()
+        self.position = position
+
+    def __next__(self) -> str:
+        # return next(self._collection)
+        try:
+            value = self._collection[self.position]
+            self.position += 1
+            return value
+        except IndexError:
+            raise StopIteration
 
 
 class Russiandoska:
-    def __init__(self, titles_input, details_input, headless_input):
-        self.title = choice(titles_input)
-        self.detail = choice(details_input)
+    def __init__(self, headless_input, proxy, position) -> None:
+        self.position = position
         options = webdriver.ChromeOptions()
         options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        astropoxy_balance = self.astroproxy_balance()
-        rucaptcha_balance = self.rucaptcha_balance()
-        print(f'astroproxy: {astropoxy_balance} captcha: {rucaptcha_balance}')
-        if astropoxy_balance > 0:
-            print(f'proxy connected ')
-            options.add_argument(rf'--proxy-server=109.248.7.161:11795')
+        self.astropoxy = self.astroproxy_balance()
+        self.rucaptcha = self.rucaptcha_balance()
+        print(f'captcha: {self.rucaptcha} astroproxy: {self.astropoxy}')
+        # if self.astropoxy > 0:
+        self.proxy = proxy
+        options.add_argument(f'--proxy-server={self.proxy}')
         if headless_input:
             options.add_argument('--headless')
         self.driver = webdriver.Chrome(options=options)
 
     @staticmethod
     def rucaptcha_balance():
-        req = requests.get('http://rucaptcha.com/res.php?key=42a3a6c8322f1bec4b5ba84b85fdbe2f&action=getbalance')
-        captcha_balance = int(req.json())
-        return captcha_balance
+        try:
+            req = requests.get('http://rucaptcha.com/res.php?key=42a3a6c8322f1bec4b5ba84b85fdbe2f&action=getbalance')
+            captcha_balance = int(req.json())
+            return captcha_balance
+        except Exception as error:
+            LOGGER.error(error)
+            return 0
 
     @staticmethod
     def astroproxy_balance():
@@ -95,9 +116,9 @@ class Russiandoska:
         right = location['x'] + size['width']
         bottom = location['y'] + size['height']
         im = im.crop((left, top, right, bottom))
-        im.save('captcha.png')
+        im.save(f'captcha_{self.position}.png')
         solver = CaptchaSolver('rucaptcha', api_key='42a3a6c8322f1bec4b5ba84b85fdbe2f')
-        raw_data = open('captcha.png', 'rb').read()
+        raw_data = open(f'captcha_{self.position}.png', 'rb').read()
         print('решение капчи')
         try:
             captcha_answer = solver.solve_captcha(raw_data, recognition_time=80)
@@ -105,39 +126,38 @@ class Russiandoska:
         except CaptchaServiceError:
             return False
 
-    def spam(self):
+    def spam(self, title, description, category, region, number):
         try:
-            self.driver.get(choice(df['category'].dropna().tolist()))
+            self.driver.get(category)
             country = '/html/body/div/div[3]/div[2]/form/div[3]/select[1]/option[2]'
-            try:
-                WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.XPATH, country))).click()
-            except TimeoutException:
-                print('не удалиось загрузить страницу')
-                return False
-            city_choice = choice(['msc', 'spb', 'sochi'])
-            if city_choice == 'msc':
-                region = f'//*[@id="a12"]/option[4]'
-                self.driver.find_element_by_xpath(region).click()
-            if city_choice == 'spb':
-                region = f'//*[@id="a12"]/option[7]'
-                self.driver.find_element_by_xpath(region).click()
-            if city_choice == 'sochi':
-                region = f'//*[@id="a12"]/option[2]'
-                self.driver.find_element_by_xpath(region).click()
-                city = f'//*[@id="a13"]/option[4]'
+            WebDriverWait(self.driver, 15).until(ec.presence_of_element_located((By.XPATH, country))).click()
+            # city_choice = choice(['Moscow', 'spb', 'sochi'])
+            # city_choice = choice(['Moscow', 'spb'])
+            city_choice = 'Moscow'
+            if city_choice == 'Moscow':
+                city = f'//*[@id="a12"]/option[4]'
                 self.driver.find_element_by_xpath(city).click()
-            titile_input = '//input[@name="title"]'
-            self.driver.find_element_by_xpath(titile_input).send_keys(self.title)
+                region = f'//*[@id="a13"]/option[{region}]'
+                self.driver.find_element_by_xpath(region).click()
+            # if city_choice == 'spb':
+            #     region = f'//*[@id="a12"]/option[7]'
+            #     self.driver.find_element_by_xpath(region).click()
+            # if city_choice == 'sochi':
+            #     region = f'//*[@id="a12"]/option[2]'
+            #     self.driver.find_element_by_xpath(region).click()
+            #     city = f'//*[@id="a13"]/option[4]'
+            #     self.driver.find_element_by_xpath(city).click()
+            title_input = '//input[@name="title"]'
+            self.driver.find_element_by_xpath(title_input).send_keys(title)
             details_textarea = '//textarea[@name="detail"]'
-            self.driver.find_element_by_xpath(details_textarea).send_keys(self.detail)
+            self.driver.find_element_by_xpath(details_textarea).send_keys(description)
             email = str(Mailbox())
             input_email = '//input[@id="email"]'
             self.driver.find_element_by_xpath(input_email).send_keys(email)
             input_email = '//input[@id="email_confirm"]'
             self.driver.find_element_by_xpath(input_email).send_keys(email)
-            phone_number = next(numbers)
             phone_input = '//input[@name="pub_phone1"]'
-            self.driver.find_element_by_xpath(phone_input).send_keys(phone_number)
+            self.driver.find_element_by_xpath(phone_input).send_keys(number)
             random_image = choice([file for file in os.listdir(IMAGES_PATH) if file.endswith('jpg')])
             jpg = f"{IMAGES_PATH}/{random_image}"  # image.jpg
             image_input = f'//input[@name="image_upload[0][1]"]'
@@ -151,40 +171,45 @@ class Russiandoska:
             success_button = '//button[@name="preview"]'
             self.driver.find_element_by_xpath(success_button).click()  # fixme
             sleep(1)
-            try:
-                assert 'Вы допустили ошибку. Исправьте ее, и попробуйте еще раз' not in self.driver.page_source
-                publish_input = '//input[@value="Опубликовать"]'
-                WebDriverWait(self.driver, 15).until(
-                    ec.presence_of_element_located((By.XPATH, publish_input))).click()
-                self.check_mail(email)
-                LOGGER.info(f'published {phone_number} {email} {city_choice}')
-                return True
-            except (AssertionError, TimeoutException):
-                print('объявление не опубликовано')
-                return False
-        except (TimeoutException, SolutionTimeoutError, WebDriverException) as error:
-            LOGGER.exception(error)
+            assert 'Вы допустили ошибку. Исправьте ее, и попробуйте еще раз' not in self.driver.page_source
+            publish_input = '//input[@value="Опубликовать"]'
+            WebDriverWait(self.driver, 15).until(
+                ec.presence_of_element_located((By.XPATH, publish_input))).click()
+            self.check_mail(email)
+            LOGGER.info(f'{self.position} {number} опубликован')
+            return True
+        except (AssertionError, TimeoutException, SolutionTimeoutError, WebDriverException) as error:
+            LOGGER.error(f'{self.position} {number} не опубликован')
             return False
 
 
-def main():
-    titles = df['titles'].dropna().tolist()
-    details = df['details'].dropna().tolist()
+def main(position):
+    headless = False
+    titles = itertools.cycle(Data('titles', position))
+    details = itertools.cycle(Data('details', position))
+    proxys = itertools.cycle(Data('proxy', position))
     while True:
-        try:
-            doska = Russiandoska(titles, details, False)
-            doska.spam()
-            doska.driver.quit()
-        except Exception as error:
-            LOGGER.exception(error)
+        categories = Data('category', position)
+        for category in categories:
+            regions = Data('region', 0)
+            for region in regions:
+                numbers = Data('number', 0)
+                for number in numbers:
+                    doska = Russiandoska(headless, next(proxys), position)
+                    try:
+                        doska.spam(next(titles), next(details), category, region, number)
+                    except Exception as error:
+                        LOGGER.exception(error)
+                    doska.driver.quit()
 
 
 if __name__ == '__main__':
-    from multiprocessing import Process
-    processes = []
-    for _ in range(2):
-        process = Process(target=main)
-        processes.append(process)
-        process.start()
-    for process in processes:
-        process.join()
+    from threading import Thread
+    threads = 3
+    threads_list = []
+    for i in range(threads):
+        thread = Thread(target=main, args=(i,))
+        threads_list.append(thread)
+        thread.start()
+    for th in threads_list:
+        th.join()
