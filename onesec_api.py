@@ -140,19 +140,3 @@ class Mailbox:
         web_body = HT.fromstring(mail_body)
         child = web_body.xpath(x_path)[0]
         return child.attrib['href']
-
-
-if __name__ == '__main__':
-    email = 'lr7u23pCp@wwjmp.com'
-    login, domain = email.split('@')
-    API = 'https://www.1secmail.com/api/v1/'
-    response = requests.get(API, params={'action': 'getMessages',
-                                         'login': login,
-                                         'domain': domain})
-    response_json_id_ = response.json()[0]['id']
-    message = requests.get(API, params={'action': 'readMessage',
-                                        'login': login,
-                                        'domain': domain,
-                                        'id': response_json_id_})
-    link = message.json()['textBody'].split('\n')[3]
-    r = requests.get(link)
