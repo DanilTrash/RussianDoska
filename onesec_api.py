@@ -1,6 +1,6 @@
 import string
 from random import choice
-import json
+
 import lxml.html as HT
 import requests
 
@@ -20,14 +20,17 @@ class Mailbox:
             self._mailbox_ = mail_name  # change to your own test mailbox
 
         domains = [
-            # '1secmail.com',
-            # '1secmail.org',
-            # '1secmail.net',
-            'wwjmp.com',
-            'esiix.com',
-            'xojxe.com',
-            'yoggm.com'
+            # "1secmail.com",
+            # "1secmail.org",
+            # "1secmail.net",
+            # "xojxe.com",
+            # "yoggm.com",
+            # "wwjmp.com",
+            # "esiix.com",
+            # "oosln.com",
+            "vddaz.com"
         ]
+
         self.domain = domain or choice(domains)
 
     def __repr__(self):

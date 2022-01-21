@@ -1,1 +1,0 @@
-scp *.py server:/home/danil/russiandoska
